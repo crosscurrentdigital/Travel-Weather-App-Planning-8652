@@ -5,7 +5,7 @@ import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import { optimizeRoute } from '../services/optimizationService';
 
-const { FiTarget, FiClock, FiMapPin, FiTrendingUp, FiShield, FiMoon } = FiIcons;
+const { FiTarget, FiClock, FiMapPin, FiTrendingUp, FiShield, FiMoon, FiDollarSign, FiUsers } = FiIcons;
 
 function TravelOptimizer({ route, preferences }) {
   const { data: optimization, isLoading } = useQuery(
@@ -43,6 +43,30 @@ function TravelOptimizer({ route, preferences }) {
 
   const scoreStyle = getRouteScore(optimization.routeScore);
 
+  // Calculate trip costs if enabled
+  const calculateTripCosts = () => {
+    if (!route.calculateCosts) return null;
+
+    const baseCosts = {
+      gas: 150,
+      hotel: 120,
+      food: 45
+    };
+
+    const totalCosts = {
+      gas: baseCosts.gas * (route.numberOfPeople || 1) * 0.8, // Gas doesn't scale linearly
+      hotel: baseCosts.hotel * Math.ceil((route.numberOfPeople || 1) / 2), // Hotel rooms for pairs
+      food: baseCosts.food * (route.numberOfPeople || 1)
+    };
+
+    return {
+      ...totalCosts,
+      total: totalCosts.gas + totalCosts.hotel + totalCosts.food
+    };
+  };
+
+  const tripCosts = calculateTripCosts();
+
   return (
     <motion.div 
       className="bg-white rounded-xl shadow-lg p-6"
@@ -52,7 +76,7 @@ function TravelOptimizer({ route, preferences }) {
     >
       <h2 className="text-2xl font-bold text-gray-900 mb-6">Travel Optimization</h2>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
         <div className={`${scoreStyle.bg} rounded-lg p-4`}>
           <div className="flex items-center justify-between mb-2">
             <SafeIcon icon={FiTarget} className={`text-2xl ${scoreStyle.color}`} />
@@ -63,7 +87,7 @@ function TravelOptimizer({ route, preferences }) {
           <h3 className="font-medium text-gray-900">Route Score</h3>
           <p className={`text-sm ${scoreStyle.color} font-medium`}>{scoreStyle.label}</p>
         </div>
-
+        
         <div className="bg-blue-50 rounded-lg p-4">
           <div className="flex items-center justify-between mb-2">
             <SafeIcon icon={FiClock} className="text-2xl text-blue-600" />
@@ -74,7 +98,7 @@ function TravelOptimizer({ route, preferences }) {
           <h3 className="font-medium text-gray-900">Optimal Departure</h3>
           <p className="text-sm text-blue-600 font-medium">Best weather window</p>
         </div>
-
+        
         <div className="bg-purple-50 rounded-lg p-4">
           <div className="flex items-center justify-between mb-2">
             <SafeIcon icon={FiTrendingUp} className="text-2xl text-purple-600" />
@@ -85,7 +109,50 @@ function TravelOptimizer({ route, preferences }) {
           <h3 className="font-medium text-gray-900">Total Duration</h3>
           <p className="text-sm text-purple-600 font-medium">Including stops</p>
         </div>
+
+        {tripCosts && (
+          <div className="bg-green-50 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-2">
+              <SafeIcon icon={FiDollarSign} className="text-2xl text-green-600" />
+              <span className="text-2xl font-bold text-green-600">
+                ${tripCosts.total}
+              </span>
+            </div>
+            <h3 className="font-medium text-gray-900">Estimated Cost</h3>
+            <p className="text-sm text-green-600 font-medium">
+              <SafeIcon icon={FiUsers} className="inline mr-1" />
+              {route.numberOfPeople} {route.numberOfPeople === 1 ? 'person' : 'people'}
+            </p>
+          </div>
+        )}
       </div>
+
+      {tripCosts && (
+        <div className="mb-6 p-4 bg-green-50 rounded-lg border border-green-200">
+          <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+            <SafeIcon icon={FiDollarSign} className="mr-2 text-green-600" />
+            Trip Cost Breakdown
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+            <div className="bg-white rounded-lg p-3">
+              <div className="font-medium text-gray-900">Gas</div>
+              <div className="text-green-600 font-bold">${tripCosts.gas}</div>
+            </div>
+            <div className="bg-white rounded-lg p-3">
+              <div className="font-medium text-gray-900">Hotels</div>
+              <div className="text-green-600 font-bold">${tripCosts.hotel}</div>
+            </div>
+            <div className="bg-white rounded-lg p-3">
+              <div className="font-medium text-gray-900">Food</div>
+              <div className="text-green-600 font-bold">${tripCosts.food}</div>
+            </div>
+            <div className="bg-white rounded-lg p-3 border-2 border-green-300">
+              <div className="font-medium text-gray-900">Total</div>
+              <div className="text-green-600 font-bold text-lg">${tripCosts.total}</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div>
@@ -112,7 +179,7 @@ function TravelOptimizer({ route, preferences }) {
             ))}
           </div>
         </div>
-
+        
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <SafeIcon icon={FiShield} className="mr-2 text-green-600" />

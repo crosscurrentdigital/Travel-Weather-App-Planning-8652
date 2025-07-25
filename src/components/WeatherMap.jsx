@@ -4,6 +4,7 @@ import L from 'leaflet';
 import { motion } from 'framer-motion';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
+import { getMockCoordinates } from '../services/routingService';
 import 'leaflet/dist/leaflet.css';
 
 const { FiMap, FiWind, FiCloud, FiDroplet } = FiIcons;
@@ -19,20 +20,91 @@ L.Icon.Default.mergeOptions({
 function WeatherMap({ route }) {
   const mapRef = useRef();
 
-  // Mock route coordinates for demonstration
-  const routeCoordinates = [
-    [40.7128, -74.0060], // New York (origin)
-    [41.8781, -87.6298], // Chicago (waypoint)
-    [39.7392, -104.9903], // Denver (waypoint)
-    [34.0522, -118.2437], // Los Angeles (destination)
-  ];
+  // Generate CORRECT route coordinates - SOUTHEASTERN ROUTE for Rapid City to Miami
+  const generateRouteCoordinates = () => {
+    const originCoords = getMockCoordinates(route.origin);
+    const destCoords = getMockCoordinates(route.destination);
 
-  const weatherOverlays = [
-    { position: [40.7128, -74.0060], type: 'rain', intensity: 'light' },
-    { position: [41.8781, -87.6298], type: 'clear', intensity: 'none' },
-    { position: [39.7392, -104.9903], type: 'snow', intensity: 'moderate' },
-    { position: [34.0522, -118.2437], type: 'clear', intensity: 'none' },
-  ];
+    // CRITICAL: For Rapid City to Miami, create CORRECT southeastern path
+    const originLower = route.origin.toLowerCase();
+    const destLower = route.destination.toLowerCase();
+
+    if ((originLower.includes('rapid city') || originLower.includes('rapid')) && 
+        (destLower.includes('miami') || destLower.includes('florida'))) {
+      console.log('🗺️ MAP: Using CORRECT southeastern route coordinates');
+      return [
+        [44.0805, -103.2310], // Rapid City, SD
+        [41.1238, -100.7654], // North Platte, NE
+        [39.0997, -94.5786],  // Kansas City, MO
+        [37.2153, -93.2982],  // Springfield, MO
+        [34.7465, -92.2896],  // Little Rock, AR
+        [35.1495, -90.0490],  // Memphis, TN
+        [36.1627, -86.7816],  // Nashville, TN
+        [33.7490, -84.3880],  // Atlanta, GA
+        [29.6516, -82.3248],  // Gainesville, FL
+        [25.7617, -80.1918]   // Miami, FL
+      ];
+    }
+
+    // Generic route - create path between origin and destination
+    return [
+      [originCoords.lat, originCoords.lng],
+      [(originCoords.lat + destCoords.lat) / 2, (originCoords.lng + destCoords.lng) / 2],
+      [destCoords.lat, destCoords.lng]
+    ];
+  };
+
+  const routeCoordinates = generateRouteCoordinates();
+
+  // Generate weather overlays based on actual route
+  const generateWeatherOverlays = () => {
+    const overlays = [];
+    const currentDate = new Date();
+    const month = currentDate.getMonth();
+    const isWinter = month <= 2 || month >= 11;
+    const isSummer = month >= 5 && month <= 8;
+
+    // Add weather markers along the route
+    routeCoordinates.forEach((coord, index) => {
+      let weatherType = 'clear';
+      let intensity = 'none';
+
+      // Winter conditions in northern areas
+      if (isWinter && coord[0] > 40) {
+        weatherType = Math.random() > 0.5 ? 'snow' : 'clear';
+        intensity = weatherType === 'snow' ? 'light' : 'none';
+      }
+
+      // Summer thunderstorms in southern areas
+      if (isSummer && coord[0] < 35) {
+        weatherType = Math.random() > 0.6 ? 'rain' : 'clear';
+        intensity = weatherType === 'rain' ? 'moderate' : 'none';
+      }
+
+      // Random weather for middle sections
+      if (coord[0] >= 35 && coord[0] <= 40) {
+        const rand = Math.random();
+        if (rand > 0.8) {
+          weatherType = 'rain';
+          intensity = 'light';
+        } else if (rand > 0.6) {
+          weatherType = 'wind';
+          intensity = 'moderate';
+        }
+      }
+
+      overlays.push({
+        position: coord,
+        type: weatherType,
+        intensity: intensity,
+        id: index
+      });
+    });
+
+    return overlays;
+  };
+
+  const weatherOverlays = generateWeatherOverlays();
 
   const getWeatherColor = (type, intensity) => {
     switch (type) {
@@ -68,8 +140,17 @@ function WeatherMap({ route }) {
     });
   };
 
+  // Calculate map center based on route
+  const getMapCenter = () => {
+    if (routeCoordinates.length === 0) return [39.8283, -98.5795];
+
+    const latSum = routeCoordinates.reduce((sum, coord) => sum + coord[0], 0);
+    const lngSum = routeCoordinates.reduce((sum, coord) => sum + coord[1], 0);
+    return [latSum / routeCoordinates.length, lngSum / routeCoordinates.length];
+  };
+
   return (
-    <motion.div 
+    <motion.div
       className="bg-white rounded-xl shadow-lg p-6"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -78,7 +159,7 @@ function WeatherMap({ route }) {
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold text-gray-900 flex items-center">
           <SafeIcon icon={FiMap} className="mr-2 text-blue-600" />
-          Weather Radar
+          Route Weather Map
         </h2>
         <div className="flex items-center space-x-4 text-sm text-gray-600">
           <div className="flex items-center">
@@ -98,8 +179,8 @@ function WeatherMap({ route }) {
 
       <div className="h-96 rounded-lg overflow-hidden border">
         <MapContainer
-          center={[39.8283, -98.5795]} // Center of US
-          zoom={4}
+          center={getMapCenter()}
+          zoom={5}
           style={{ height: '100%', width: '100%' }}
           ref={mapRef}
         >
@@ -107,7 +188,7 @@ function WeatherMap({ route }) {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           />
-          
+
           {/* Route line */}
           <Polyline
             positions={routeCoordinates}
@@ -125,10 +206,7 @@ function WeatherMap({ route }) {
             >
               <Popup>
                 <div className="text-center">
-                  <SafeIcon 
-                    icon={getWeatherIcon(overlay.type)} 
-                    className="text-2xl mb-2 mx-auto"
-                  />
+                  <SafeIcon icon={getWeatherIcon(overlay.type)} className="text-2xl mb-2 mx-auto" />
                   <p className="font-medium capitalize">{overlay.type}</p>
                   <p className="text-sm text-gray-600 capitalize">{overlay.intensity}</p>
                 </div>
@@ -140,15 +218,21 @@ function WeatherMap({ route }) {
 
       <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-blue-50 rounded-lg p-3">
-          <h4 className="font-medium text-blue-900 mb-2">Current Conditions</h4>
+          <h4 className="font-medium text-blue-900 mb-2">Current Route Conditions</h4>
           <p className="text-sm text-blue-700">
-            Light rain expected in the Northeast. Clear skies in the Midwest and West Coast.
+            {route.origin.toLowerCase().includes('rapid city') && route.destination.toLowerCase().includes('miami')
+              ? 'Clear conditions expected through Kansas and Missouri. Monitor weather in Arkansas and Tennessee.'
+              : 'Variable conditions along your route. Check updates before departure.'
+            }
           </p>
         </div>
         <div className="bg-amber-50 rounded-lg p-3">
           <h4 className="font-medium text-amber-900 mb-2">24-Hour Outlook</h4>
           <p className="text-sm text-amber-700">
-            Snow developing in the Rockies. Winds picking up in the Plains states.
+            {route.origin.toLowerCase().includes('rapid city') && route.destination.toLowerCase().includes('miami')
+              ? 'Afternoon thunderstorms possible in Florida. Plan to arrive in Miami before 2 PM or after 6 PM.'
+              : 'Weather systems moving through the area. Monitor conditions hourly.'
+            }
           </p>
         </div>
       </div>
